@@ -54,7 +54,7 @@ use crate::{
 
 use rayon::prelude::*;
 
-use super::ParallelMemoryHierarchy;
+use super::{ParallelMemoryHierarchy, TRACK_COHERENCE_MISSES};
 
 impl<
     MMU: AbstractMMU,
@@ -317,6 +317,10 @@ impl<
 
         // Now, we communicate with the directory. Current miss is mapped to the following position in the directory entry share list.
         let p_cache_id = PCache::get_cache_id_by_cache_info(core_id, is_instruction);
+        if TRACK_COHERENCE_MISSES && self.coh_marks[p_cache_id].lock().remove(&block_id) && !is_prefetch {
+            Statistics::global_record(core_id, EventType::PrivateCacheCoherenceMiss, is_os);
+            Statistics::global_record(core_id, if is_instruction { EventType::PrivateICacheCoherenceMiss } else { EventType::PrivateDCacheCoherenceMiss }, is_os);
+        }
 
         let record_op = if is_store {
             CacheOperationType::GetM
@@ -787,6 +791,9 @@ impl<
 
                         // invalid the private cache entry.
                         set.invalidate(*index);
+                        if TRACK_COHERENCE_MISSES && victim_core_id != core_id {
+                            self.coh_marks[*replica_cache_id].lock().insert(block_id);
+                        }
 
                         causality_violation |= access_ts > ts;
 

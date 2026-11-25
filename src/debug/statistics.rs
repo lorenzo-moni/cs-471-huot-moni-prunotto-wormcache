@@ -211,6 +211,9 @@ pub enum EventType {
     SharedMemoryCausalityViolation,
     InterruptCausalityViolation,
     InterruptDelayedWithCausality,
+    PrivateCacheCoherenceMiss, // Demand miss on a block that another core's write invalidated in this private cache. Sum of the two below.
+    PrivateICacheCoherenceMiss, // Same, in the L1I.
+    PrivateDCacheCoherenceMiss, // Same, in the L1D (includes page-walk reads).
 }
 
 impl EventType {

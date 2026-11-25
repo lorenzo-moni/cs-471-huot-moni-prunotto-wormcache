@@ -48,6 +48,9 @@ use std::cell::UnsafeCell;
 use std::collections::HashSet;
 use std::ops::DerefMut;
 
+// Set to false to build a plugin without coherence-miss tracking (used to measure its overhead).
+const TRACK_COHERENCE_MISSES: bool = true;
+
 #[cfg(test)]
 mod debug_tests;
 // #[cfg(test)]
@@ -90,6 +93,7 @@ pub struct ParallelMemoryHierarchy<
     pht: ParallelPHT<CORE_COUNT, PHT_SETS, PHT_WAYS, N_BLK, ROT, SEP_RDWR, SAT_CNT, PERFECT_PHT>,
     pf_blocks: [SpinMutex<HashSet<u64>>; CORE_COUNT],
     pf_stats: [SpinMutex<(usize, usize, usize)>; CORE_COUNT], // (total, useless, useful)
+    coh_marks: Box<[SpinMutex<HashSet<u64>>]>, // per private cache id: blocks invalidated by another core's write
 
     shared_cache: SCache,
 }
@@ -197,6 +201,7 @@ impl<
             >::new(),
             pf_blocks: std::array::from_fn(|_| SpinMutex::new(HashSet::new())),
             pf_stats: std::array::from_fn(|_| SpinMutex::new((0, 0, 0))), // (total, useless, useful)
+            coh_marks: (0..2 * CORE_COUNT).map(|_| SpinMutex::new(HashSet::new())).collect(),
         }
     }
 
